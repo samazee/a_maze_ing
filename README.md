@@ -1,4 +1,4 @@
-## *This project has been created as part of the 42 curriculum by aait-idi, yoabied.*
+## *This project has been created as part of the 42 curriculum by aait-idi, azgor.*
 
 <!-- 9sem -->
 <div style="display: flex; justify-content: space-between; align-items: center;">

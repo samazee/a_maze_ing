@@ -10,29 +10,6 @@ except ImportError as e:
     sys.exit(1)
 
 
-def get_config() -> MazeConfig:
-    argc = len(sys.argv)
-    if argc != 2:
-        raise ValueError("Usage: python a-maze-ing.py <config_file>")
-    try:
-        with open(sys.argv[1]) as f:
-            return MazeConfig.from_file(f)
-    except FileNotFoundError:
-        raise ValueError(f"Config file '{sys.argv[1]}' not found.")
-    except PermissionError:
-        raise ValueError(f"Permission denied for config file '{sys.argv[1]}'.")
-    except OSError as e:
-        raise ValueError(f"Error opening config file '{sys.argv[1]}': {e}")
-
-
-def display_info(config: MazeConfig, color: str = "\033[31m") -> None:
-    for key, value in config.get_config().items():
-        if key == "seed" and value is None:
-            value = "Random"
-        print(f"{color} {key} {value} \033[0m   ", end="")
-    print("\n")
-
-
 def read_key() -> str:
     """reads a single character from the user input without blocking
     """
@@ -69,16 +46,16 @@ def display_menu(colors: dict[str, str]) -> None:
         )
 
 
-def start(mzgen: MazeGenerator, mzcnf: MazeConfig, mzasci: AsciiMaze) -> None:
+def render(mzgen: MazeGenerator, mzcnf: MazeConfig, mzasci: AsciiMaze) -> None:
     while True:
         sys.stdout.write("\033[H\033[J")
-        mzasci.render(mzgen.maze)
+        mzasci.draw(mzgen.maze)
         display_menu(mzasci.clr)
         key = read_key().lower()
         if key == "q":
             break
         elif key == "r":
-            mzgen.intialize()
+            mzgen.initialize()
             mzgen.wilson_algo()
             mzasci = AsciiMaze(mzgen.maze)
             mzgen.connect_ascii(mzasci)
@@ -111,21 +88,17 @@ def start_maze_interaction() -> None:
     the ascii maze and starts the interactive menu
     """
     try:
-        mzcnf = get_config()
+        mzcnf = MazeConfig.new()
     except (ValueError, ValidationError) as e:
         raise ValueError(f"\033[31mConfig Error:\033[0m {e}")
 
     try:
-        mzgen = MazeGenerator.from_object(mzcnf)
-        mzgen.intialize()
+        mzgen = MazeGenerator.new(mzcnf)
+        mzgen.initialize()
     except ValueError as e:
         raise ValueError(f"\033[31mMaze Generation Error:\033[0m {e}")
 
-    try:
-        mzasci = AsciiMaze(mzgen.maze)
-        mzgen.connect_ascii(mzasci)
-    except ValueError as e:
-        raise ValueError(f"\033[31masci display Error:\033[0m {e}")
+    mzasci = AsciiMaze(mzgen.maze)
 
     try:
         mzgen.wilson_algo()
@@ -134,7 +107,7 @@ def start_maze_interaction() -> None:
         raise ValueError(f"\033[31mMaze Generation Error:\033[0m {e}")
 
     try:
-        start(mzgen, mzcnf, mzasci)
+        render(mzgen, mzcnf, mzasci)
     except Exception as e:
         raise ValueError(f"\033[31mInteraction Error:\033[0m {e}")
 
@@ -145,5 +118,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"\033[31mError:\033[0m {e}")
+        raise e
         sys.exit(1)

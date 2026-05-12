@@ -3,9 +3,9 @@ import sys
 import random
 import time
 import tty
-from collections.abc import Callable
-from .AsciiMaze import AsciiMaze
-from .MazeConfig import MazeConfig
+from collections.abc import Callable, Iterator 
+from typing import Optional
+from .maze_config import MazeConfig
 from heapq import heappush, heappop
 
 
@@ -13,8 +13,7 @@ class MazeGenerator:
     def __init__(self, width: int, height: int,
                  entry: tuple[int, int], exit: tuple[int, int],
                  seed: int | None = None, perfect: bool = True,
-                 output_file: str = "maze.txt",
-                 already_valid: bool = False) -> None:
+                 output_file: str = "maze.txt") -> None:
         """ initializes the MazeGenerator with the given parameters,
 
         Args:
@@ -37,8 +36,8 @@ class MazeGenerator:
             from a MazeConfig object,
             to avoid validating the parameters twice. Defaults to False.
         """
-        self.w: int = width
-        self.h: int = height
+        self.width: int = width
+        self.height: int = height
         self.maze: list[list[int]] = []
         self.entry: tuple[int, int] = entry
         self.exit: tuple[int, int] = exit
@@ -46,16 +45,13 @@ class MazeGenerator:
         self.output_file: str = output_file
         self.perfect: bool = perfect
         self.seed = seed
-        self.asciimaze: AsciiMaze | None = None
         self.solution: str = ""
         if seed is None:
             self.seed = int(time.time())
         random.seed(self.seed)
-        if not already_valid:
-            self._validate_params()
 
-    @classmethod
-    def from_object(cls, config: MazeConfig) -> 'MazeGenerator':
+    @staticmethod
+    def new(config: MazeConfig) -> 'MazeGenerator':
         """ creates a MazeGenerator from a configuration object,
         which should have the same attributes as the constructor parameters
 
@@ -66,34 +62,16 @@ class MazeGenerator:
         Returns:
             MazeGenerator: the generated maze
         """
-        return cls(
+        return MazeGenerator(
             width=config.width,
             height=config.height,
             entry=config.entry,
             exit=config.exit,
             perfect=config.perfect,
             seed=config.seed,
-            output_file=config.output_file,
-            already_valid=True
+            output_file=config.output_file
         )
 
-    def _validate_params(self) -> None:
-        """ validates the parameters for maze generation,
-        ensuring that the width and height are sufficient,
-
-        Raises:
-            ValueError: if the width or height are too small,
-            or if the entry or exit points are out of bounds,
-            or if the entry and exit points are the same
-        """
-        if self.w < 9 or self.h < 7:
-            raise ValueError("Width and height must be at least 9 and 7")
-        if not (0 <= self.entry[0] < self.w and 0 <= self.entry[1] < self.h):
-            raise ValueError("Entry coordinates out of bounds")
-        if not (0 <= self.exit[0] < self.w and 0 <= self.exit[1] < self.h):
-            raise ValueError("Exit coordinates out of bounds")
-        if self.entry == self.exit:
-            raise ValueError("Entry and exit cannot be the same point")
 
     def write_to_file(self, filename: str) -> None:
         """ writes the generated maze to a file in the specified format,
@@ -110,30 +88,23 @@ class MazeGenerator:
             f.write(f"{self.exit[0]},{self.exit[1]}\n")
             f.write(self.solution + '\n')
 
-    def intialize(self) -> None:
+    def initialize(self) -> None:
         """generates the maze by initializing it,
         adding the 42 pattern, marking the entry and exit,
         """
-        self.maze = [[15 for _ in range(self.w)] for _ in range(self.h)]
-        for i in range(self.w):
+        self.maze = [[15 for _ in range(self.width)] for _ in range(self.height)]
+        for i in range(self.width):
             self.maze[0][i] |= 0b0001
-            self.maze[self.h - 1][i] |= 0b0100
-        for i in range(self.h):
+            self.maze[self.height - 1][i] |= 0b0100
+        for i in range(self.height):
             self.maze[i][0] |= 0b1000
-            self.maze[i][self.w - 1] |= 0b0010
+            self.maze[i][self.width - 1] |= 0b0010
 
         self.maze[self.entry[1]][self.entry[0]] |= 0b10000000
         self.maze[self.entry[1]][self.entry[0]] |= 0b100000
         self.maze[self.exit[1]][self.exit[0]] |= 0b01000000
         self._add_42_pattern()
 
-    def connect_ascii(self, ascii: AsciiMaze) -> None:
-        """connects the maze generator to an AsciiMaze instance
-        for visualization during generation and solving
-        """
-        if not isinstance(ascii, AsciiMaze):
-            raise ValueError("Expected an instance of AsciiMaze")
-        self.asciimaze = ascii
 
     def wilson_algo(self) -> None:
         """ generates the maze using Wilson's algorithm,
@@ -159,10 +130,10 @@ class MazeGenerator:
                 if (p[1] > 0
                         and self.maze[p[1] - 1][p[0]] >> 4 != 0b1111):
                     neighbors.append((p[0], p[1] - 1))
-                if (p[0] < self.w - 1
+                if (p[0] < self.width - 1
                         and self.maze[p[1]][p[0] + 1] >> 4 != 0b1111):
                     neighbors.append((p[0] + 1, p[1]))
-                if (p[1] < self.h - 1
+                if (p[1] < self.height - 1
                         and self.maze[p[1] + 1][p[0]] >> 4 != 0b1111):
                     neighbors.append((p[0], p[1] + 1))
                 if (p[0] > 0
@@ -187,6 +158,7 @@ class MazeGenerator:
                     path.append(p)
                     self.maze[p[1]][p[0]] |= 0b10000
 
+
         def carve_path(path: list[tuple[int, int]]) -> None:
             """ carves the path taken by the random walk
             into the maze by opening the walls
@@ -208,9 +180,9 @@ class MazeGenerator:
                 neighbors = []
                 if p[1] > 0 and self.maze[p[1] - 1][p[0]] >> 4 != 0:
                     neighbors.append((p[0], p[1] - 1))
-                if p[0] < self.w - 1 and self.maze[p[1]][p[0] + 1] >> 4 != 0:
+                if p[0] < self.width - 1 and self.maze[p[1]][p[0] + 1] >> 4 != 0:
                     neighbors.append((p[0] + 1, p[1]))
-                if p[1] < self.h - 1 and self.maze[p[1] + 1][p[0]] >> 4 != 0:
+                if p[1] < self.height - 1 and self.maze[p[1] + 1][p[0]] >> 4 != 0:
                     neighbors.append((p[0], p[1] + 1))
                 if p[0] > 0 and self.maze[p[1]][p[0] - 1] >> 4 != 0:
                     neighbors.append((p[0] - 1, p[1]))
@@ -254,8 +226,8 @@ class MazeGenerator:
                 to_break = "NESW"
                 self._change_wall(p1, random.choice(to_break), "open")
 
-        unvisited = set((x, y) for x in range(self.w)
-                        for y in range(self.h)
+        unvisited = set((x, y) for x in range(self.width)
+                        for y in range(self.height)
                         if not self.maze[y][x] >> 4 & 0b1)
         rpoint: tuple[int, int] = random.choice(list(unvisited))
         while True:
@@ -269,17 +241,18 @@ class MazeGenerator:
             unvisited -= set(new_connected)
             carve_path(new_connected)
 
-        for y in range(self.h):
-            for x in range(self.w):
+        for y in range(self.height):
+            for x in range(self.width):
                 self.maze[y][x] &= ~0b100000
 
         self.maze[self.entry[1]][self.entry[0]] |= 0b10000000
         self.maze[self.exit[1]][self.exit[0]] |= 0b01000000
 
-        for y in range(self.h):
-            for x in range(self.w):
+        for y in range(self.height):
+            for x in range(self.width):
                 if self.maze[y][x] & 0b1111 == 0b1111:
                     self.maze[y][x] = 0b11111111
+
 
     def _add_42_pattern(self) -> None:
         """closes the walls in a pattern that resembles
@@ -294,8 +267,8 @@ class MazeGenerator:
 
         for p in l42:
             p_offset: tuple[int, int] = (
-                p[0] + round(self.w / 2) - 3,
-                p[1] + round(self.h / 2) - 3
+                p[0] + round(self.width / 2) - 3,
+                p[1] + round(self.height / 2) - 3
                 )
             if p_offset in (self.entry, self.exit):
                 raise ValueError("42 pattern overlaps entry or exit")
@@ -341,48 +314,21 @@ class MazeGenerator:
                 action(p[0], p[1] - 1, 0b0100)
         if 'E' in to_change:
             action(p[0], p[1], 0b0010)
-            if p[0] < self.w - 1:
+            if p[0] < self.width - 1:
                 action(p[0] + 1, p[1], 0b1000)
         if 'S' in to_change:
             action(p[0], p[1], 0b0100)
-            if p[1] < self.h - 1:
+            if p[1] < self.height - 1:
                 action(p[0], p[1] + 1, 0b0001)
         if 'W' in to_change:
             action(p[0], p[1], 0b1000)
             if p[0] > 0:
                 action(p[0] - 1, p[1], 0b0010)
 
-    def render(self) -> None:
-        """ renders the maze using the connected
-        AsciiMaze instance, if available,
-        """
-        if self.asciimaze:
-            self.asciimaze.render()
-
-    def free_move(self) -> None:
+    def free_move(self) -> Iterator[int]:
         """gives the ability to move in the maze using WASD,
         it marks your position as path (|= 11000000) using termios
         """
-        def display_menu(color: str) -> None:
-            """ displays the menu for the free move mode,
-            showing the controls and their descriptions
-
-            Args:
-                color (str): the color to use for the menu display
-            """
-            beff = "\033[1m"
-            teff = "\033[3m"
-
-            bclr = color + "\033[38;2;255;255;255m"
-            rst = "\033[0m"
-
-            print()
-            print(
-                f"{bclr}{beff} W {rst}|{bclr}{teff} Move Up {rst}  "
-                f"{bclr}{beff} A {rst}|{bclr}{teff} Move Left {rst}  "
-                f"{bclr}{beff} S {rst}|{bclr}{teff} Move Down {rst}  "
-                f"{bclr}{beff} D {rst}|{bclr}{teff} Move Right {rst}  "
-                )
 
         def read_key() -> str:
             """reads a single character from the user input without blocking
@@ -401,12 +347,10 @@ class MazeGenerator:
 
         pos = self.entry
         new_pos = pos
-        color = self.asciimaze.clr["block"] if self.asciimaze else "\033[44m"
+        steps = 1
         while True:
             self.maze[new_pos[1]][new_pos[0]] |= 0b11000000
             sys.stdout.write("\033[H\033[J")
-            self.render()
-            display_menu(color)
             pos = new_pos
             if pos == self.exit:
                 break
@@ -415,7 +359,7 @@ class MazeGenerator:
                 self.maze[pos[1]][pos[0]] &= ~0b11000000
                 self.maze[self.entry[1]][self.entry[0]] |= 0b10000000
                 self.maze[self.exit[1]][self.exit[0]] |= 0b01000000
-                break
+                return
             elif key == 'w':
                 if not self.maze[pos[1]][pos[0]] & 0b0001:
                     new_pos = (pos[0], pos[1] - 1)
@@ -434,119 +378,95 @@ class MazeGenerator:
                 self.maze[pos[1]][pos[0]] &= ~0b1000000
             else:
                 self.maze[pos[1]][pos[0]] &= ~0b11000000
+            yield steps
+            steps += 1
 
-    def solve_maze(self, with_animation: bool) -> list[tuple[int, int]] | None:
-        """ solves the maze using the A* algorithm,
-        which is a pathfinding algorithm
-
-        Args:
-            with_animation (bool): whether to animate the solving
-            process by rendering the maze at each step,
-
-        Returns:
-            list[tuple[int, int]] | None: the path from the entry
-            to the exit as a list of coordinates,
+    def solve_maze(self, with_animation: bool) -> Optional[Iterator[int]]:
         """
-        start = self.entry
-        end = self.exit
+        Solves the maze using the A* algorithm.
+        If with_animation is True, returns an iterator.
+        If with_animation is False, runs to completion and returns None.
+        """
 
-        def points_to_path(points: list[tuple[int, int]]) -> str:
-            """ converts a list of coordinates
-            representing a path through the maze
+        def _solve_generator() -> Iterator[int]:
+            start = self.entry
+            end = self.exit
+            steps = 0
 
-            Args:
-                points (list[tuple[int, int]]): a list of
-                coordinates representing a path through the maze
-
-            Returns:
-                str: a string representation of the path,
-                where each character represents
-            """
-            path = ""
-            for i in range(len(points) - 1):
-                p1, p2 = points[i], points[i + 1]
-                if p1[0] == p2[0]:
-                    if p1[1] < p2[1]:
-                        path += "S"
+            def points_to_path(points: list[tuple[int, int]]) -> str:
+                path = ""
+                for i in range(len(points) - 1):
+                    p1, p2 = points[i], points[i + 1]
+                    if p1[0] == p2[0]:
+                        path += "S" if p1[1] < p2[1] else "N"
                     else:
-                        path += "N"
-                else:
-                    if p1[0] < p2[0]:
-                        path += "E"
-                    else:
-                        path += "W"
-            return path
-
-        def how_far(p: tuple[int, int]) -> int:
-            """ calculates the Manhattan distance from
-            the given point to the exit point,
-
-            Args:
-                p (tuple[int, int]): the point to calculate the distance from
-
-            Returns:
-                int: the Manhattan distance from
-                the given point to the exit point
-            """
-            return abs(p[0] - end[0]) + abs(p[1] - end[1])
-
-        def get_neighbors(p: tuple[int, int]) -> list[tuple[int, int]]:
-            """ returns the neighboring cells of a given cell
-            that are not blocked by walls,
-
-            Args:
-                p (tuple[int, int]): the cell to get the neighbors of
-
-            Returns:
-                list[tuple[int, int]]: the neighboring
-                cells that are not blocked by walls
-            """
-            neighbors = []
-            if not self.maze[p[1]][p[0]] & 0b0001 and p[1] > 0:
-                neighbors.append((p[0], p[1] - 1))
-            if not self.maze[p[1]][p[0]] & 0b0010 and p[0] < self.w - 1:
-                neighbors.append((p[0] + 1, p[1]))
-            if not self.maze[p[1]][p[0]] & 0b0100 and p[1] < self.h - 1:
-                neighbors.append((p[0], p[1] + 1))
-            if not self.maze[p[1]][p[0]] & 0b1000 and p[0] > 0:
-                neighbors.append((p[0] - 1, p[1]))
-            return neighbors
-
-        heap = [(how_far(start), 0, start, [start])]
-        visited: set[tuple[int, int]] = set()
-
-        while heap:
-            if with_animation:
-                sys.stdout.write("\033[H\033[J")
-                self.render()
-            _, cost, point, path = heappop(heap)
-            if point == end:
-                for p in path:
-                    self.maze[p[1]][p[0]] |= 0b11000000
-                    if with_animation:
-                        sys.stdout.write("\033[H\033[J")
-                        self.render()
-                        time.sleep(0.04)
-                self.maze[start[1]][start[0]] &= ~0b01000000
-                self.maze[end[1]][end[0]] &= ~0b10000000
-                for p in visited:
-                    self.maze[p[1]][p[0]] &= ~0b10000
-                self.solution = points_to_path(path)
+                        path += "E" if p1[0] < p2[0] else "W"
                 return path
-            if point in visited:
-                continue
-            visited.add(point)
-            self.maze[point[1]][point[0]] |= 0b10000
-            for neighbor in get_neighbors(point):
-                if neighbor not in visited:
-                    new_cost = cost + 1
-                    heappush(heap, (
-                        new_cost + how_far(neighbor),
-                        new_cost,
-                        neighbor,
-                        path + [neighbor]
-                    ))
-            if with_animation:
-                time.sleep(0.04)
 
-        return None
+            def how_far(p: tuple[int, int]) -> int:
+                return abs(p[0] - end[0]) + abs(p[1] - end[1])
+
+            def get_neighbors(p: tuple[int, int]) -> list[tuple[int, int]]:
+                neighbors = []
+                if not self.maze[p[1]][p[0]] & 0b0001 and p[1] > 0:
+                    neighbors.append((p[0], p[1] - 1))
+                if not self.maze[p[1]][p[0]] & 0b0010 and p[0] < self.width - 1:
+                    neighbors.append((p[0] + 1, p[1]))
+                if not self.maze[p[1]][p[0]] & 0b0100 and p[1] < self.height - 1:
+                    neighbors.append((p[0], p[1] + 1))
+                if not self.maze[p[1]][p[0]] & 0b1000 and p[0] > 0:
+                    neighbors.append((p[0] - 1, p[1]))
+                return neighbors
+
+            heap = [(how_far(start), 0, start, [start])]
+            visited: set[tuple[int, int]] = set()
+
+            while heap:
+                _, cost, point, path = heappop(heap)
+                
+                if point == end:
+                    for p in path:
+                        self.maze[p[1]][p[0]] |= 0b11000000
+                        if with_animation:
+                            sys.stdout.write("\033[H\033[J")
+                            time.sleep(0.04)
+                            yield steps
+                    
+                    self.maze[start[1]][start[0]] &= ~0b01000000
+                    self.maze[end[1]][end[0]] &= ~0b10000000
+                    for p in visited:
+                        self.maze[p[1]][p[0]] &= ~0b10000
+                    
+                    self.solution = points_to_path(path)
+                    return
+
+                if point in visited:
+                    continue
+                    
+                visited.add(point)
+                steps += 1
+                self.maze[point[1]][point[0]] |= 0b10000
+
+                for neighbor in get_neighbors(point):
+                    if neighbor not in visited:
+                        new_cost = cost + 1
+                        heappush(heap, (
+                            new_cost + how_far(neighbor),
+                            new_cost,
+                            neighbor,
+                            path + [neighbor]
+                        ))
+                
+                if with_animation:
+                    sys.stdout.write("\033[H\033[J")
+                    time.sleep(0.04)
+                    yield steps
+
+        solver = _solve_generator()
+        
+        if with_animation:
+            return solver
+        else:
+            for _ in solver:
+                pass
+            return None

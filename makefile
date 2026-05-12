@@ -9,7 +9,7 @@ RESET = \033[0m
 # Variables
 PYTHON = python3
 PIP	= pip3
-MAIN = a-maze-ing.py
+MAIN = a_maze_ing.py
 CONFIG = config.txt
 
 .PHONY: run install debug clean lint lint-strict

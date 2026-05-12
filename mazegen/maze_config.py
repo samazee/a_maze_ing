@@ -1,5 +1,6 @@
 from typing import TextIO, Any
 import os
+import sys
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 os.environ['PYDANTIC_ERRORS_INCLUDE_URL'] = '0'
 
@@ -45,7 +46,7 @@ class MazeConfig(BaseModel):
         return v
 
     @field_validator('entry', 'exit', mode='before')
-    def vali_coordinates(cls, v: str) -> tuple[int, int]:
+    def validate_coordinates(cls, v: str) -> tuple[int, int]:
         """validate that the coordinates are in the correct format (x,y)
 
         Args:
@@ -60,13 +61,13 @@ class MazeConfig(BaseModel):
         try:
             splitted = v.split(',')
             if len(splitted) != 2:
-                raise ValueError("Must be in x,y format")
+                raise ValueError("Config Error: must be in x,y format")
             return (int(splitted[0].strip()), int(splitted[1].strip()))
         except (ValueError, IndexError):
-            raise ValueError("Coordinates must be in x,y format")
+            raise ValueError("Config Error: coordinates must be in x,y format")
 
     @field_validator('entry', 'exit')
-    def vali_bounds(cls, v: tuple[int, int], info: Any) -> tuple[int, int]:
+    def validate_bounds(cls, v: tuple[int, int], info: Any) -> tuple[int, int]:
         """validate that the coordinates are within the bounds of the maze
 
         Args:
@@ -83,11 +84,11 @@ class MazeConfig(BaseModel):
             w = info.data['width']
             h = info.data['height']
             if not (0 <= x < w and 0 <= y < h):
-                raise ValueError(f"Coordinates {v} out of bounds [{w}x{h}]")
+                raise ValueError(f"Config Error: coordinates {v} out of bounds [{w}x{h}]")
         return v
 
     @field_validator('exit')
-    def vali_is_same_points(cls, v: tuple[int, int],
+    def validate_is_same_points(cls, v: tuple[int, int],
                             info: Any) -> tuple[int, int]:
         """validate that entry and exit are not the same point
 
@@ -101,7 +102,7 @@ class MazeConfig(BaseModel):
             tuple[int, int]: the exit coordinates if valid
         """
         if info.data.get('entry') and v == info.data['entry']:
-            raise ValueError("Entry and exit must be different")
+            raise ValueError("Config Error: entry and exit must be different")
         return v
 
     @classmethod
@@ -140,19 +141,19 @@ class MazeConfig(BaseModel):
                 k = key.strip().upper()
                 v = value.strip().upper()
                 if k in data and k in required and v != data[k]:
-                    raise ValueError(f"Duplicate key: {key.strip()}")
+                    raise ValueError(f"Config Error: duplicate key: {key.strip()}")
                 data[key.strip().upper()] = value.strip()
         except FileNotFoundError:
-            raise ValueError(f"Config file '{fl.name}' not found.")
+            raise ValueError(f"Config Error: config file '{fl.name}' not found.")
         except PermissionError:
-            raise ValueError(f"Permission denied for config file '{fl.name}'.")
+            raise ValueError(f"Config Error: permission denied for config file '{fl.name}'.")
         except OSError as e:
-            raise ValueError(f"Error opening config file '{fl.name}': {e}")
+            raise ValueError(f"Config Error: error opening config file '{fl.name}': {e}")
         except Exception as e:
-            raise ValueError(f"Error reading config file: {e}")
+            raise ValueError(f"Config Error: error reading config file: {e}")
         missing = [k for k in required if k not in data]
         if missing:
-            raise ValueError(f"Missing required keys: {', '.join(missing)}")
+            raise ValueError(f"Config Error: missing required keys: {', '.join(missing)}")
 
         try:
             return cls(
@@ -166,7 +167,17 @@ class MazeConfig(BaseModel):
                 else None,
             )
         except ValueError as e:
-            raise ValueError(f"Invalid config values: {e}")
+            raise ValueError(f"Config Error: invalid config values: {e}")
+
+
+    @staticmethod
+    def new() -> 'MazeConfig':
+        try:
+            with open(sys.argv[1]) as f:
+                return MazeConfig.from_file(f)
+        except Exception as e:
+            raise e 
+
 
     def get_config(self) -> dict[str, Any]:
         """return the config as a dict, useful for printing and debugging.
