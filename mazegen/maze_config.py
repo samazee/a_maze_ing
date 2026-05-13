@@ -168,8 +168,8 @@ class MazeConfig(BaseModel):
             return cls(
                 width=int(data["WIDTH"]),
                 height=int(data["HEIGHT"]),
-                entry=data["ENTRY"],  # type: ignore
-                exit=data["EXIT"],  # type: ignore
+                entry=data["ENTRY"],  # type: ignore[arg-type]
+                exit=data["EXIT"],  # type: ignore[arg-type]
                 output_file=data["OUTPUT_FILE"],
                 perfect=data["PERFECT"].lower() in ("true", "1", "yes"),
                 seed=int(data["SEED"]) if "SEED" in data

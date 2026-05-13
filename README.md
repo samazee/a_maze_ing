@@ -77,7 +77,7 @@ Wilson's algorithm was chosen for this project because it is efficient and produ
 The code for the maze generation and solving algorithms can be reused in other projects that require similar functionality. The code is modular and can be easily integrated into other applications.
 
 ## Team and project management
-- Team members: aait-idi (Maze Generation, Path finding, ...), yoabied (parsing, config validation and program stracture)
+- Team members: aait-idi (Maze Generation, Path finding, ...), azgor (parsing, config validation and program stracture)
 - Anticipated planning: The project was planned to be completed in 2 weeks, with each week dedicated to a specific phase of the project (planning, implementation, testing, and documentation). The planning changes as we progressed through the project.
 - What worked well: We was able to effectively communicate and collaborate throughout the project, which helped to ensure that tasks were completed on time and to a high standard.
 - What could be improved: We could have spent more time refining the project and mazegeneration implimentation, as well as testing the code more thoroughly to identify and fix any bugs or issues.
