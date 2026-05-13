@@ -1,9 +1,7 @@
-import termios
 import sys
 import random
 import time
-import tty
-from collections.abc import Callable, Iterator 
+from collections.abc import Callable, Iterator
 from typing import Optional
 from .maze_config import MazeConfig
 from heapq import heappush, heappop
@@ -46,6 +44,7 @@ class MazeGenerator:
         self.perfect: bool = perfect
         self.seed = seed
         self.solution: str = ""
+        self.position: tuple[int, int] = entry
         if seed is None:
             self.seed = int(time.time())
         random.seed(self.seed)
@@ -72,7 +71,6 @@ class MazeGenerator:
             output_file=config.output_file
         )
 
-
     def write_to_file(self, filename: str) -> None:
         """ writes the generated maze to a file in the specified format,
 
@@ -92,7 +90,10 @@ class MazeGenerator:
         """generates the maze by initializing it,
         adding the 42 pattern, marking the entry and exit,
         """
-        self.maze = [[15 for _ in range(self.width)] for _ in range(self.height)]
+        self.maze = [
+            [15 for _ in range(self.width)]
+            for _ in range(self.height)
+        ]
         for i in range(self.width):
             self.maze[0][i] |= 0b0001
             self.maze[self.height - 1][i] |= 0b0100
@@ -104,7 +105,6 @@ class MazeGenerator:
         self.maze[self.entry[1]][self.entry[0]] |= 0b100000
         self.maze[self.exit[1]][self.exit[0]] |= 0b01000000
         self._add_42_pattern()
-
 
     def wilson_algo(self) -> None:
         """ generates the maze using Wilson's algorithm,
@@ -158,7 +158,6 @@ class MazeGenerator:
                     path.append(p)
                     self.maze[p[1]][p[0]] |= 0b10000
 
-
         def carve_path(path: list[tuple[int, int]]) -> None:
             """ carves the path taken by the random walk
             into the maze by opening the walls
@@ -180,9 +179,11 @@ class MazeGenerator:
                 neighbors = []
                 if p[1] > 0 and self.maze[p[1] - 1][p[0]] >> 4 != 0:
                     neighbors.append((p[0], p[1] - 1))
-                if p[0] < self.width - 1 and self.maze[p[1]][p[0] + 1] >> 4 != 0:
+                if (p[0] < self.width - 1
+                        and self.maze[p[1]][p[0] + 1] >> 4 != 0):
                     neighbors.append((p[0] + 1, p[1]))
-                if p[1] < self.height - 1 and self.maze[p[1] + 1][p[0]] >> 4 != 0:
+                if (p[1] < self.height - 1
+                        and self.maze[p[1] + 1][p[0]] >> 4 != 0):
                     neighbors.append((p[0], p[1] + 1))
                 if p[0] > 0 and self.maze[p[1]][p[0] - 1] >> 4 != 0:
                     neighbors.append((p[0] - 1, p[1]))
@@ -252,7 +253,6 @@ class MazeGenerator:
             for x in range(self.width):
                 if self.maze[y][x] & 0b1111 == 0b1111:
                     self.maze[y][x] = 0b11111111
-
 
     def _add_42_pattern(self) -> None:
         """closes the walls in a pattern that resembles
@@ -325,63 +325,45 @@ class MazeGenerator:
             if p[0] > 0:
                 action(p[0] - 1, p[1], 0b0010)
 
-    def free_move(self) -> Iterator[int]:
-        """gives the ability to move in the maze using WASD,
-        it marks your position as path (|= 11000000) using termios
-        """
+    def reset_positions(self) -> None:
+        self.maze[self.position[1]][self.position[0]] &= ~0b11000000
+        self.maze[self.entry[1]][self.entry[0]] |= 0b10000000
+        self.maze[self.exit[1]][self.exit[0]] |= 0b01000000
+        self.position = self.entry
 
-        def read_key() -> str:
-            """reads a single character from the user input without blocking
-            """
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                tty.setraw(sys.stdin.fileno())
-                ch = sys.stdin.read(1)
-            except Exception as e:
-                print(f"\033[31mError reading input:\033[0m {e}")
-                ch = ""
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            return ch.lower()
+    def move_up(self) -> None:
+        pos = self.position
+        if not self.maze[pos[1]][pos[0]] & 0b0001:
+            self.maze[pos[1]][pos[0]] &= ~0b11000000
+            self.position = (pos[0], pos[1] - 1)
 
-        pos = self.entry
-        new_pos = pos
-        steps = 1
-        while True:
-            self.maze[new_pos[1]][new_pos[0]] |= 0b11000000
-            sys.stdout.write("\033[H\033[J")
-            pos = new_pos
-            if pos == self.exit:
-                break
-            key = read_key()
-            if key in ('q', '\x03', 'm'):
-                self.maze[pos[1]][pos[0]] &= ~0b11000000
-                self.maze[self.entry[1]][self.entry[0]] |= 0b10000000
-                self.maze[self.exit[1]][self.exit[0]] |= 0b01000000
-                return
-            elif key == 'w':
-                if not self.maze[pos[1]][pos[0]] & 0b0001:
-                    new_pos = (pos[0], pos[1] - 1)
-            elif key == 'a':
-                if not self.maze[pos[1]][pos[0]] & 0b1000:
-                    new_pos = (pos[0] - 1, pos[1])
-            elif key == 's':
-                if not self.maze[pos[1]][pos[0]] & 0b0100:
-                    new_pos = (pos[0], pos[1] + 1)
-            elif key == 'd':
-                if not self.maze[pos[1]][pos[0]] & 0b0010:
-                    new_pos = (pos[0] + 1, pos[1])
-            if pos == self.entry:
-                self.maze[pos[1]][pos[0]] &= ~0b01000000
-            elif pos == self.exit:
-                self.maze[pos[1]][pos[0]] &= ~0b1000000
-            else:
-                self.maze[pos[1]][pos[0]] &= ~0b11000000
-            yield steps
-            steps += 1
+    def move_down(self) -> None:
+        pos = self.position
+        if not self.maze[pos[1]][pos[0]] & 0b0100:
+            self.maze[pos[1]][pos[0]] &= ~0b11000000
+            self.position = (pos[0], pos[1] + 1)
 
-    def solve_maze(self, with_animation: bool) -> Optional[Iterator[int]]:
+    def move_left(self) -> None:
+        pos = self.position
+        if not self.maze[pos[1]][pos[0]] & 0b1000:
+            self.maze[pos[1]][pos[0]] &= ~0b11000000
+            self.position = (pos[0] - 1, pos[1])
+
+    def move_right(self) -> None:
+        pos = self.position
+        if not self.maze[pos[1]][pos[0]] & 0b0010:
+            self.maze[pos[1]][pos[0]] &= ~0b11000000
+            self.position = (pos[0] + 1, pos[1])
+
+    def entry_exit(self) -> None:
+        pos = self.position
+        if pos == self.entry:
+            self.maze[pos[1]][pos[0]] &= ~0b01000000
+        elif pos == self.exit:
+            self.maze[pos[1]][pos[0]] &= ~0b1000000
+
+    def solve_maze(self,
+                   with_animation: bool) -> Optional[Iterator[int]]:
         """
         Solves the maze using the A* algorithm.
         If with_animation is True, returns an iterator.
@@ -410,9 +392,11 @@ class MazeGenerator:
                 neighbors = []
                 if not self.maze[p[1]][p[0]] & 0b0001 and p[1] > 0:
                     neighbors.append((p[0], p[1] - 1))
-                if not self.maze[p[1]][p[0]] & 0b0010 and p[0] < self.width - 1:
+                if (not self.maze[p[1]][p[0]] & 0b0010
+                        and p[0] < self.width - 1):
                     neighbors.append((p[0] + 1, p[1]))
-                if not self.maze[p[1]][p[0]] & 0b0100 and p[1] < self.height - 1:
+                if (not self.maze[p[1]][p[0]] & 0b0100
+                        and p[1] < self.height - 1):
                     neighbors.append((p[0], p[1] + 1))
                 if not self.maze[p[1]][p[0]] & 0b1000 and p[0] > 0:
                     neighbors.append((p[0] - 1, p[1]))
@@ -423,7 +407,7 @@ class MazeGenerator:
 
             while heap:
                 _, cost, point, path = heappop(heap)
-                
+
                 if point == end:
                     for p in path:
                         self.maze[p[1]][p[0]] |= 0b11000000
@@ -431,22 +415,17 @@ class MazeGenerator:
                             sys.stdout.write("\033[H\033[J")
                             time.sleep(0.04)
                             yield steps
-                    
                     self.maze[start[1]][start[0]] &= ~0b01000000
                     self.maze[end[1]][end[0]] &= ~0b10000000
                     for p in visited:
                         self.maze[p[1]][p[0]] &= ~0b10000
-                    
                     self.solution = points_to_path(path)
                     return
-
                 if point in visited:
                     continue
-                    
                 visited.add(point)
                 steps += 1
                 self.maze[point[1]][point[0]] |= 0b10000
-
                 for neighbor in get_neighbors(point):
                     if neighbor not in visited:
                         new_cost = cost + 1
@@ -456,14 +435,11 @@ class MazeGenerator:
                             neighbor,
                             path + [neighbor]
                         ))
-                
                 if with_animation:
                     sys.stdout.write("\033[H\033[J")
                     time.sleep(0.04)
                     yield steps
-
         solver = _solve_generator()
-        
         if with_animation:
             return solver
         else:

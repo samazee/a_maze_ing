@@ -1,11 +1,10 @@
 import tomllib
-from typing import TextIO, Generator
+from typing import Generator
 import os
 import sys
 import termios
 import tty
 from .maze_generator import MazeGenerator
-from .maze_config import MazeConfig
 
 
 def load_colors(theme: str) -> dict[str, str]:
@@ -85,7 +84,6 @@ class AsciiMaze:
                 if (self.generator.maze[r][c] >> 4) == 0b1100:
                     self.generator.maze[r][c] &= 0b111111
 
-
     def next_color(self) -> None:
         """switches to the next color scheme
         """
@@ -95,7 +93,6 @@ class AsciiMaze:
         """toggles the visibility of the path in the maze
         """
         self.showpath = not self.showpath
-
 
     def draw(self) -> None:
         """renders the maze to the console
@@ -185,7 +182,6 @@ class AsciiMaze:
 
         write(''.join(buff))
 
-
     @staticmethod
     def read_key() -> str:
         """reads a single character from the user input without blocking
@@ -202,9 +198,13 @@ class AsciiMaze:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch.lower()
 
-
     @staticmethod
     def display_menu(colors: dict[str, str]) -> None:
+        """ displays the menu for controls and their descriptions
+
+        Args:
+            color (dict[str, str}): the colors to use for the menu display
+        """
         beff = "\033[1m"
         teff = "\033[3m"
 
@@ -223,20 +223,19 @@ class AsciiMaze:
             f"{bclr}{beff} W {rst}|{bclr}{teff} Write to File {rst}"
             )
 
-
     @staticmethod
-    def display_move_menu(color: str) -> None:
+    def display_move_menu(colors: dict[str, str]) -> None:
         """ displays the menu for the free move mode,
         showing the controls and their descriptions
 
         Args:
-            color (str): the color to use for the menu display
+            color (dict[str, str}): the colors to use for the menu display
         """
         beff = "\033[1m"
         teff = "\033[3m"
 
-        bclr = color + "\033[38;2;255;255;255m"
-        rst = "\033[0m"
+        bclr = colors["block"] + "\033[38;2;255;255;255m"
+        rst = colors["reset"]
 
         print()
         print(
@@ -244,8 +243,8 @@ class AsciiMaze:
             f"{bclr}{beff} A {rst}|{bclr}{teff} Move Left {rst}  "
             f"{bclr}{beff} S {rst}|{bclr}{teff} Move Down {rst}  "
             f"{bclr}{beff} D {rst}|{bclr}{teff} Move Right {rst}  "
+            f"{bclr}{beff} Q {rst}|{bclr}{teff} Quit {rst}  "
             )
-
 
     def render(self) -> None:
         self.generator.initialize()
@@ -254,8 +253,7 @@ class AsciiMaze:
         sys.stdout.write("\033[H\033[J")
         self.draw()
         AsciiMaze.display_menu(self.clr)
-        rerender = True
-        while rerender:
+        while True:
             key = AsciiMaze.read_key().lower()
             if key == "q":
                 break
@@ -263,48 +261,72 @@ class AsciiMaze:
                 self.generator.initialize()
                 self.generator.wilson_algo()
                 os.system('cls' if os.name == 'nt' else 'clear')
-                sys.stdout.write("\033[H\033[J")
                 self.draw()
                 AsciiMaze.display_menu(self.clr)
             elif key == "c":
                 self.next_color()
                 os.system('cls' if os.name == 'nt' else 'clear')
-                sys.stdout.write("\033[H\033[J")
                 self.draw()
                 AsciiMaze.display_menu(self.clr)
             elif key == "s":
                 self.generator.solve_maze(False)
                 self.showpath = True
                 os.system('cls' if os.name == 'nt' else 'clear')
-                sys.stdout.write("\033[H\033[J")
                 self.draw()
                 AsciiMaze.display_menu(self.clr)
             elif key == "a":
                 self.delete_path()
                 self.showpath = True
                 animator = self.generator.solve_maze(True)
-                while next(animator, None) is not None:
+                while (next(animator, None)  # type: ignore[arg-type]
+                       is not None):
                     os.system('cls' if os.name == 'nt' else 'clear')
-                    sys.stdout.write("\033[H\033[J")
                     self.draw()
                     AsciiMaze.display_menu(self.clr)
             elif key == "h":
                 self.toggle_path()
                 os.system('cls' if os.name == 'nt' else 'clear')
-                sys.stdout.write("\033[H\033[J")
                 self.draw()
                 AsciiMaze.display_menu(self.clr)
             elif key == "m":
                 self.showpath = True
                 self.delete_path()
-                while next(self.generator.free_move, None) is not None:
+                pos = self.generator.position
+                self.generator.maze[pos[1]][pos[0]] |= 0b11000000
+                os.system('cls' if os.name == 'nt' else 'clear')
+                self.draw()
+                AsciiMaze.display_move_menu(self.clr)
+                while True:
+                    key = AsciiMaze.read_key().lower()
+                    pos = self.generator.position
+                    if pos == self.generator.exit:
+                        break
+                    if (key in ('q', '\x03', 'm')
+                            or pos == self.generator.exit):
+                        self.showpath = False
+                        self.generator.reset_positions()
+                        os.system('cls' if os.name == 'nt' else 'clear')
+                        self.draw()
+                        AsciiMaze.display_menu(self.clr)
+                        break
+                    elif key == 'w':
+                        self.generator.move_up()
+                    elif key == 'a':
+                        self.generator.move_left()
+                    elif key == 's':
+                        self.generator.move_down()
+                    elif key == 'd':
+                        self.generator.move_right()
+                    self.generator.entry_exit()
+                    pos = self.generator.position
+                    self.generator.maze[pos[1]][pos[0]] |= 0b11000000
                     os.system('cls' if os.name == 'nt' else 'clear')
-                    sys.stdout.write("\033[H\033[J")
                     self.draw()
                     AsciiMaze.display_move_menu(self.clr)
             elif key == "w":
                 try:
                     self.generator.write_to_file(self.generator.output_file)
-                    print(f"\033[32mMaze written to {self.generator.output_file}\033[0m")
+                    print("\033[32mMaze written to "
+                          f"{self.generator.output_file}\033[0m")
                 except Exception as e:
                     print(f"\033[31mError writing to file:\033[0m {e}")

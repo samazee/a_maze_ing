@@ -84,12 +84,15 @@ class MazeConfig(BaseModel):
             w = info.data['width']
             h = info.data['height']
             if not (0 <= x < w and 0 <= y < h):
-                raise ValueError(f"Config Error: coordinates {v} out of bounds [{w}x{h}]")
+                raise ValueError("Config Error: coordinates "
+                                 f"{v} out of bounds [{w}x{h}]")
         return v
 
     @field_validator('exit')
-    def validate_is_same_points(cls, v: tuple[int, int],
-                            info: Any) -> tuple[int, int]:
+    def validate_is_same_points(
+            cls,
+            v: tuple[int, int],
+            info: Any) -> tuple[int, int]:
         """validate that entry and exit are not the same point
 
         Args:
@@ -141,19 +144,25 @@ class MazeConfig(BaseModel):
                 k = key.strip().upper()
                 v = value.strip().upper()
                 if k in data and k in required and v != data[k]:
-                    raise ValueError(f"Config Error: duplicate key: {key.strip()}")
+                    raise ValueError("Config Error: duplicate key: "
+                                     f"{key.strip()}")
                 data[key.strip().upper()] = value.strip()
         except FileNotFoundError:
-            raise ValueError(f"Config Error: config file '{fl.name}' not found.")
+            raise ValueError("Config Error: config file "
+                             f"'{fl.name}' not found.")
         except PermissionError:
-            raise ValueError(f"Config Error: permission denied for config file '{fl.name}'.")
+            raise ValueError("Config Error: permission "
+                             f"denied for config file '{fl.name}'.")
         except OSError as e:
-            raise ValueError(f"Config Error: error opening config file '{fl.name}': {e}")
+            raise ValueError("Config Error: error opening "
+                             f"config file '{fl.name}': {e}")
         except Exception as e:
-            raise ValueError(f"Config Error: error reading config file: {e}")
+            raise ValueError("Config Error: error reading "
+                             f"config file: {e}")
         missing = [k for k in required if k not in data]
         if missing:
-            raise ValueError(f"Config Error: missing required keys: {', '.join(missing)}")
+            raise ValueError("Config Error: missing "
+                             f"required keys: {', '.join(missing)}")
 
         try:
             return cls(
@@ -169,15 +178,13 @@ class MazeConfig(BaseModel):
         except ValueError as e:
             raise ValueError(f"Config Error: invalid config values: {e}")
 
-
     @staticmethod
     def new() -> 'MazeConfig':
         try:
             with open(sys.argv[1]) as f:
                 return MazeConfig.from_file(f)
         except Exception as e:
-            raise e 
-
+            raise e
 
     def get_config(self) -> dict[str, Any]:
         """return the config as a dict, useful for printing and debugging.
